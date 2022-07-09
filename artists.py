@@ -1,26 +1,29 @@
 import csv
+from unittest import skip
 import requests
 import json
 
 class Entry:
-  def __init__(self, name, playcount, change):
+  def __init__(self, name, playcount, change, rank):
     self.name = name
     self.playcount = playcount
     self.change = change
+    self.rank = rank
 
 
 def replaceCSV(newArtists):
-    rank = 0
+    idx = 0
+    rank = 1
     with open('Artists.csv', 'w', encoding='utf-8') as f:
         for l in newArtists:
-            rank += 1
-            f.write(str(l.change) + "," + str(rank) + "," + l.name + "," + str(l.playcount))
-            f.write('\n')
+            idx += 1
+            f.write(str(l.change) + "," + str(idx) + "," + l.name + "," + str(l.playcount) + "," + str(l.rank))
+            f.write('\n')            
 
 
 def loadPrevList():
 
-    with open('Artists.csv', newline='') as csvfile:
+    with open('Artists.csv', newline='', encoding='utf-8') as csvfile:
         artists = list(csv.reader(csvfile))
 
     return artists
@@ -28,11 +31,12 @@ def loadPrevList():
 def loadLastFM():
 
     response = requests.get(
-        "http://ws.audioscrobbler.com/2.0/?method=user.gettopartists&user=earljw&api_key=KEY_HERE&format=json&limit=600")
+        "http://ws.audioscrobbler.com/2.0/?method=user.gettopartists&user=earljw&api_key=f754abe8f31a6125cf170af8c912a5ff&format=json&limit=600")
     
     return response.json()
 
 def writeHTML(newArtists):
+    lastRank = 0
     with open('artists.html', 'w', encoding="utf-8") as f:
         f.write("<html><head></head><body><table>")
         idx = 0
@@ -48,7 +52,8 @@ def writeHTML(newArtists):
                 f.write(str(p.change * -1))
             f.write("</td>")
             f.write("<td>")
-            f.write(str(idx))
+            if p.rank != lastRank or p.rank == 1:
+                f.write(str(p.rank))
             f.write("</td>")
             f.write("<td>")
             f.write(p.name)
@@ -57,6 +62,7 @@ def writeHTML(newArtists):
             f.write(str(p.playcount))
             f.write("</td>")
             f.write("</tr>")
+            lastRank = p.rank
         f.write("</table></body></html>")
 
 def main():
@@ -64,9 +70,21 @@ def main():
     newArtistsJson = loadLastFM()
 
     newArtists = []
+    rank = 0
+    lastPlaycount = -1
+    skipping = 1
     for i in newArtistsJson["topartists"]["artist"]:
-        entry = Entry(i["name"], i["playcount"], 0)
+        if i["playcount"] != lastPlaycount:
+            if skipping > 0:
+                rank += skipping
+                skipping = 1
+            else:
+                rank = rank + 1
+        else:
+            skipping += 1
+        entry = Entry(i["name"], i["playcount"], 0, rank) 
         newArtists.append(entry)
+        lastPlaycount = i["playcount"]
         
     # Now that we have all the data loaded, figure out how much each entry has changed.
 
@@ -82,10 +100,12 @@ def main():
             if j.name.encode("ascii", "ignore") == k[2].encode("ascii", "ignore"):
                 found = True
             if(found):
-                j.change = newidx - oldidx
+                #j.change = newidx - oldidx
+                if len(k) > 4:
+                    j.change = j.rank - int(k[4])
+                else:
+                    j.change = 0
                 break
-
-
 
     replaceCSV(newArtists)
     writeHTML(newArtists)
