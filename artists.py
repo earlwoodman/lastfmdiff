@@ -13,7 +13,6 @@ class Entry:
 
 def replaceCSV(newArtists):
     idx = 0
-    rank = 1
     with open('Artists.csv', 'w', encoding='utf-8') as f:
         for l in newArtists:
             idx += 1
@@ -88,19 +87,12 @@ def main():
         
     # Now that we have all the data loaded, figure out how much each entry has changed.
 
-    newidx = 0
-    oldidx = 0
-
     for j in newArtists:
-        newidx += 1
         found = False
-        oldidx = 0
         for k in oldArtists:
-            oldidx += 1
             if j.name.encode("ascii", "ignore") == k[2].encode("ascii", "ignore"):
                 found = True
             if(found):
-                #j.change = newidx - oldidx
                 if len(k) > 4:
                     j.change = j.rank - int(k[4])
                 else:

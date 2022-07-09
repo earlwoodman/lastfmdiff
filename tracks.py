@@ -1,20 +1,22 @@
 import csv
 import requests
 import json
+import re
 
 class Entry:
-  def __init__(self, name, playcount, change):
+  def __init__(self, name, playcount, change, rank):
     self.name = name
     self.playcount = playcount
     self.change = change
+    self.rank = rank
 
 
 def replaceCSV(newTracks):
-    rank = 0
+    idx = 0
     with open('Tracks.csv', 'w', encoding='utf-8') as f:
         for l in newTracks:
-            rank += 1
-            f.write(str(l.change) + "," + str(rank) + "," + l.name + "," + str(l.playcount))
+            idx += 1
+            f.write(str(l.change) + "," + str(idx) + ",\"" + l.name + "\"," + str(l.playcount) + "," + str(l.rank))
             f.write('\n')
 
 
@@ -28,11 +30,12 @@ def loadPrevList():
 def loadLastFM():
 
     response = requests.get(
-        "http://ws.audioscrobbler.com/2.0/?method=user.gettoptracks&user=earljw&api_key=KEY_HERE&format=json&limit=1000")        
+        "http://ws.audioscrobbler.com/2.0/?method=user.gettoptracks&user=earljw&api_key=f754abe8f31a6125cf170af8c912a5ff&format=json&limit=1000")        
     
     return response.json()
 
 def writeHTML(newTracks):
+    lastRank = 0
     with open('tracks.html', 'w', encoding="utf-8") as f:
         f.write("<html><head></head><body><table>")
         idx = 0
@@ -48,7 +51,8 @@ def writeHTML(newTracks):
                 f.write(str(p.change * -1))
             f.write("</td>")
             f.write("<td>")
-            f.write(str(idx))
+            if p.rank != lastRank or p.rank == 1:
+                f.write(str(p.rank))
             f.write("</td>")
             f.write("<td>")
             f.write(p.name)
@@ -57,6 +61,7 @@ def writeHTML(newTracks):
             f.write(str(p.playcount))
             f.write("</td>")
             f.write("</tr>")
+            lastRank = p.rank            
         f.write("</table></body></html>")
 
 def main():
@@ -64,25 +69,35 @@ def main():
     newTracksJson = loadLastFM()
 
     newTracks = []
+    rank = 0
+    lastPlaycount = -1
+    skipping = 1
     for i in newTracksJson["toptracks"]["track"]:
-        entry = Entry(i["artist"]["name"] + " - " + i["name"], i["playcount"], 0)
+        if i["playcount"] != lastPlaycount:
+            if skipping > 0:
+                rank += skipping
+                skipping = 1
+            else:
+                rank = rank + 1
+        else:
+            skipping += 1        
+        trackname = i["name"]
+        entry = Entry(i["artist"]["name"] + " - " + trackname, i["playcount"], 0, rank)
         newTracks.append(entry)
+        lastPlaycount = i["playcount"]
         
     # Now that we have all the data loaded, figure out how much each entry has changed.
 
-    newidx = 0
-    oldidx = 0
-
     for j in newTracks:
-        newidx += 1
         found = False
-        oldidx = 0
         for k in oldTracks:
-            oldidx += 1
             if j.name.encode("ascii", "ignore") == k[2].encode("ascii", "ignore"):
                 found = True
             if(found):
-                j.change = newidx - oldidx
+                if len(k) > 4:
+                    j.change = j.rank - int(k[4])
+                else:
+                    j.change = 0
                 break
 
     replaceCSV(newTracks)
